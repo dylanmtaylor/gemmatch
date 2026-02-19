@@ -4,6 +4,9 @@ A Bejeweled-style match-3 puzzle game built entirely with the Godot 4.x engine. 
 
 ![Godot 4.x](https://img.shields.io/badge/Godot-4.x-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Platform](https://img.shields.io/badge/platform-Linux-orange)
 
+![Title Screen](screenshots/title.png)
+![Gameplay](screenshots/gameplay.png)
+
 ## How to Play
 
 - **Click** a gem to select it, then **click** an adjacent gem to swap
