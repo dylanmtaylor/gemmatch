@@ -67,7 +67,7 @@ flatpak run org.godotengine.Godot --path /path/to/GemMatch
 
 ## How This Was Made
 
-This game was built entirely through an AI-assisted conversation with **Claude Opus 4** (via Kiro CLI) on **February 18, 2025**, in a single session lasting roughly 1.5 hours.
+This game was built entirely through an AI-assisted conversation with **Claude Opus 4.6** (via Kiro CLI) on **February 18, 2025**, in a single session lasting roughly 1.5 hours.
 
 ### The process
 
