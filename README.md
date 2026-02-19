@@ -6,6 +6,7 @@ A Bejeweled-style match-3 puzzle game built entirely with the Godot 4.x engine. 
 
 ![Title Screen](screenshots/title.png)
 ![Gameplay](screenshots/gameplay.png)
+![How to Play](screenshots/howtoplay.png)
 
 ## How to Play
 

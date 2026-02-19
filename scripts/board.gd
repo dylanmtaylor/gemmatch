@@ -66,6 +66,9 @@ var demo_mode := false
 var demo_timer := 0.0
 var demo_target := Vector2i(-1, -1)
 const DEMO_MOVE_DELAY := 0.25
+var paused := false
+var pause_hover := 0
+const PAUSE_ITEMS: Array[String] = ["Resume", "Back to Title", "Quit"]
 
 @onready var score_label: Label = $"../ScoreLabel"
 @onready var level_label: Label = $"../LevelLabel"
@@ -109,6 +112,9 @@ func _has_match_at(col: int, row: int) -> bool:
 # --- Process ---
 func _process(delta: float) -> void:
 	select_pulse += delta * 5.0
+	if paused:
+		queue_redraw()
+		return
 	shake_amount = move_toward(shake_amount, 0.0, delta * 40.0)
 	bg_hue_shift += delta * 0.02
 
@@ -371,12 +377,43 @@ func _draw() -> void:
 		var da: float = 0.15 + sin(select_pulse * 0.5) * 0.12
 		draw_string(font, Vector2(GRID_OFFSET.x, GRID_OFFSET.y + GRID_SIZE * CELL_SIZE * 0.5 + 20), "DEMO", HORIZONTAL_ALIGNMENT_CENTER, CELL_SIZE * GRID_SIZE, 64, Color(1, 1, 1, da))
 
+	# Pause overlay
+	if paused:
+		draw_rect(Rect2(Vector2.ZERO, Vector2(600, 730)), Color(0, 0, 0, 0.6))
+		draw_string(font, Vector2(0, 300), "PAUSED", HORIZONTAL_ALIGNMENT_CENTER, 600, 48, Color(1, 1, 1, 0.9))
+		for i in PAUSE_ITEMS.size():
+			var py: float = 370.0 + i * 50.0
+			var c := Color(1, 1, 1, 0.7)
+			if pause_hover == i:
+				c = Color(1, 0.9, 0.3, 1.0)
+				var arrow_x: float = 300.0 - font.get_string_size(PAUSE_ITEMS[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x * 0.5 - 20.0
+				draw_string(font, Vector2(arrow_x, py), ">", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, c)
+			draw_string(font, Vector2(0, py), PAUSE_ITEMS[i], HORIZONTAL_ALIGNMENT_CENTER, 600, 26, c)
+
 # --- Input (click + drag) ---
 func _input(event: InputEvent) -> void:
 	if demo_mode:
 		if (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed):
 			get_tree().change_scene_to_file("res://scenes/title.tscn")
 		return
+
+	# Pause menu input
+	if paused:
+		if event is InputEventKey and event.pressed:
+			match event.keycode:
+				KEY_UP, KEY_W: pause_hover = posmod(pause_hover - 1, PAUSE_ITEMS.size())
+				KEY_DOWN, KEY_S: pause_hover = posmod(pause_hover + 1, PAUSE_ITEMS.size())
+				KEY_ENTER, KEY_SPACE: _activate_pause(pause_hover)
+				KEY_ESCAPE: paused = false
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_activate_pause(pause_hover)
+		if event is InputEventMouseMotion:
+			for i in PAUSE_ITEMS.size():
+				var py: float = 370.0 + i * 50.0
+				if event.position.x > 150 and event.position.x < 450 and event.position.y > py - 25 and event.position.y < py + 10:
+					pause_hover = i
+		return
+
 	if animating:
 		return
 	if no_moves:
@@ -401,7 +438,8 @@ func _input(event: InputEvent) -> void:
 					selected = Vector2i(-1, -1)
 				return
 			KEY_ESCAPE:
-				selected = Vector2i(-1, -1)
+				paused = true
+				pause_hover = 0
 				return
 		if dir != Vector2i.ZERO:
 			if selected != Vector2i(-1, -1):
@@ -890,6 +928,12 @@ func _has_valid_moves() -> bool:
 					if not m.is_empty():
 						return true
 	return false
+
+func _activate_pause(idx: int) -> void:
+	match idx:
+		0: paused = false
+		1: get_tree().change_scene_to_file("res://scenes/title.tscn")
+		2: get_tree().quit()
 
 func _restart() -> void:
 	no_moves = false
