@@ -10,6 +10,10 @@ config/name="GemMatch"
 run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.2", "GL Compatibility")
 
+[autoload]
+
+HighScores="*res://scripts/high_scores.gd"
+
 [display]
 
 window/size/viewport_width=600

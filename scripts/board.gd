@@ -44,6 +44,9 @@ var no_moves := false
 var dragging := false
 var drag_from := Vector2i(-1, -1)
 
+# Keyboard cursor
+var cursor := Vector2i(3, 3)
+
 # Hint
 var hint_timer := 0.0
 var hint_cells: Array[Vector2i] = []
@@ -59,6 +62,10 @@ var select_pulse := 0.0
 var combo_text := ""
 var combo_life := 0.0
 var bg_hue_shift := 0.0
+var demo_mode := false
+var demo_timer := 0.0
+var demo_target := Vector2i(-1, -1)
+const DEMO_MOVE_DELAY := 0.25
 
 @onready var score_label: Label = $"../ScoreLabel"
 @onready var level_label: Label = $"../LevelLabel"
@@ -67,6 +74,8 @@ var bg_hue_shift := 0.0
 
 # --- Init ---
 func _ready() -> void:
+	demo_mode = HighScores.start_demo
+	HighScores.start_demo = false
 	_init_grid()
 	_update_ui()
 
@@ -134,11 +143,67 @@ func _process(delta: float) -> void:
 	if combo_life > 0:
 		combo_life -= delta
 
+	# Demo auto-play
+	if demo_mode and not animating and not no_moves:
+		demo_timer += delta
+		if demo_timer >= DEMO_MOVE_DELAY:
+			demo_timer = 0.0
+			if selected == Vector2i(-1, -1):
+				_demo_select()
+			else:
+				_demo_swap()
+
 	queue_redraw()
 
 # --- Drawing ---
 func _cell_pos(col: int, row: int) -> Vector2:
 	return GRID_OFFSET + Vector2(col, row) * CELL_SIZE + Vector2.ONE * CELL_SIZE * 0.5
+
+func _draw_background() -> void:
+	var hue: float = fmod(float(level - 1) * 0.13 + bg_hue_shift, 1.0)
+	var base := Color.from_hsv(hue, 0.3, 0.18)
+	draw_rect(Rect2(Vector2.ZERO, Vector2(600, 730)), base)
+	var pattern: int = (level - 1) % 5
+	var t: float = bg_hue_shift * 50.0  # use accumulated time
+	var accent := Color.from_hsv(hue, 0.5, 0.35)
+	match pattern:
+		0:  # Floating circles
+			for i in 30:
+				var x: float = fmod(i * 47.3 + t * (0.3 + fmod(i * 0.17, 0.4)), 700.0) - 50.0
+				var y: float = fmod(i * 31.7 + t * (0.2 + fmod(i * 0.13, 0.3)), 830.0) - 50.0
+				var r: float = 15.0 + fmod(i * 7.3, 25.0)
+				draw_circle(Vector2(x, y), r, Color(accent.r, accent.g, accent.b, 0.15 + fmod(i * 0.01, 0.1)))
+		1:  # Diagonal lines
+			for i in 20:
+				var offset: float = fmod(i * 60.0 - t * 20.0, 1400.0) - 400.0
+				draw_line(Vector2(offset, 0), Vector2(offset + 730, 730), Color(accent.r, accent.g, accent.b, 0.12), 2.0)
+		2:  # Diamonds
+			for i in 25:
+				var cx: float = fmod(i * 53.0 + t * 0.25, 700.0) - 50.0
+				var cy: float = fmod(i * 41.0 + t * 0.15, 830.0) - 50.0
+				var s: float = 12.0 + fmod(i * 9.1, 20.0)
+				var pts := PackedVector2Array([Vector2(cx, cy - s), Vector2(cx + s, cy), Vector2(cx, cy + s), Vector2(cx - s, cy)])
+				draw_colored_polygon(pts, Color(accent.r, accent.g, accent.b, 0.14))
+		3:  # Horizontal waves
+			for j in 8:
+				var pts := PackedVector2Array()
+				var by: float = j * 100.0 + fmod(t * 15.0, 100.0) - 50.0
+				for x in range(0, 620, 20):
+					pts.append(Vector2(x, by + sin(float(x) * 0.02 + t * 0.5 + j) * 30.0))
+				for k in range(pts.size() - 1):
+					draw_line(pts[k], pts[k + 1], Color(accent.r, accent.g, accent.b, 0.12), 2.0)
+		4:  # Hexagon grid
+			var hex_r := 30.0
+			for gx in range(-1, 12):
+				for gy in range(-1, 14):
+					var cx: float = gx * hex_r * 1.75 + fmod(t * 8.0, hex_r * 1.75)
+					var cy: float = gy * hex_r * 1.5 + (hex_r * 0.75 if gx % 2 == 1 else 0.0)
+					var hp := PackedVector2Array()
+					for k in 6:
+						var a: float = TAU / 6.0 * k
+						hp.append(Vector2(cx + cos(a) * hex_r, cy + sin(a) * hex_r))
+					for k in 6:
+						draw_line(hp[k], hp[(k + 1) % 6], Color(accent.r, accent.g, accent.b, 0.1), 1.0)
 
 func _draw_gem_shape(center: Vector2, r: float, shape: GemShape, color: Color, bright: Color, dark: Color) -> void:
 	match shape:
@@ -224,7 +289,10 @@ func _draw_special_overlay(center: Vector2, r: float, spec: int) -> void:
 func _draw() -> void:
 	var shake_off := Vector2(randf_range(-shake_amount, shake_amount), randf_range(-shake_amount, shake_amount))
 
-	# Background
+	# Full-screen animated background — pattern changes each level
+	_draw_background()
+
+	# Grid background
 	var bg_color := Color.from_hsv(fmod(bg_hue_shift, 1.0), 0.15, 0.12)
 	draw_rect(Rect2(GRID_OFFSET + shake_off, Vector2.ONE * CELL_SIZE * GRID_SIZE), bg_color)
 
@@ -269,9 +337,16 @@ func _draw() -> void:
 
 	# Selection highlight
 	if selected != Vector2i(-1, -1):
-		var sel_center := _cell_pos(selected.x, selected.y) + shake_off
+		var sel_off: Vector2 = gem_offsets.get(selected, Vector2.ZERO)
+		var sel_center := _cell_pos(selected.x, selected.y) + shake_off + sel_off
 		var pulse: float = 1.0 + sin(select_pulse) * 0.12
 		draw_arc(sel_center, CELL_SIZE * 0.5 * pulse, 0, TAU, 32, Color(1, 1, 1, 0.5 + sin(select_pulse) * 0.3), 3.0)
+
+	# Keyboard cursor
+	if not demo_mode:
+		var cur_pos := GRID_OFFSET + Vector2(cursor) * CELL_SIZE + shake_off
+		var ca: float = 0.3 + sin(select_pulse * 1.5) * 0.15
+		draw_rect(Rect2(cur_pos, Vector2.ONE * CELL_SIZE), Color(1, 1, 1, ca), false, 2.0)
 
 	# Particles
 	for pt in particles:
@@ -291,18 +366,61 @@ func _draw() -> void:
 		var cy: float = GRID_OFFSET.y - 30 - (1.0 - ca) * 20
 		draw_string(font, Vector2(GRID_OFFSET.x + 150, cy), combo_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 30, Color(1, 0.8, 0.2, ca))
 
+	# Demo watermark
+	if demo_mode:
+		var da: float = 0.15 + sin(select_pulse * 0.5) * 0.12
+		draw_string(font, Vector2(GRID_OFFSET.x, GRID_OFFSET.y + GRID_SIZE * CELL_SIZE * 0.5 + 20), "DEMO", HORIZONTAL_ALIGNMENT_CENTER, CELL_SIZE * GRID_SIZE, 64, Color(1, 1, 1, da))
+
 # --- Input (click + drag) ---
 func _input(event: InputEvent) -> void:
+	if demo_mode:
+		if (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed):
+			get_tree().change_scene_to_file("res://scenes/title.tscn")
+		return
 	if animating:
 		return
-	if no_moves and event is InputEventMouseButton and event.pressed:
-		_restart()
+	if no_moves:
+		if (event is InputEventMouseButton and event.pressed) or (event is InputEventKey and event.pressed):
+			_restart()
 		return
+
+	# Keyboard input
+	if event is InputEventKey and event.pressed:
+		var dir := Vector2i.ZERO
+		match event.keycode:
+			KEY_UP, KEY_W: dir = Vector2i(0, -1)
+			KEY_DOWN, KEY_S: dir = Vector2i(0, 1)
+			KEY_LEFT, KEY_A: dir = Vector2i(-1, 0)
+			KEY_RIGHT, KEY_D: dir = Vector2i(1, 0)
+			KEY_ENTER, KEY_SPACE:
+				if selected == Vector2i(-1, -1):
+					selected = cursor
+					sfx.play(sfx.select_sound)
+					_reset_hint()
+				elif selected == cursor:
+					selected = Vector2i(-1, -1)
+				return
+			KEY_ESCAPE:
+				selected = Vector2i(-1, -1)
+				return
+		if dir != Vector2i.ZERO:
+			if selected != Vector2i(-1, -1):
+				# Swap selected gem in direction
+				var target := selected + dir
+				if target.x >= 0 and target.x < GRID_SIZE and target.y >= 0 and target.y < GRID_SIZE:
+					sfx.play(sfx.swap_sound)
+					_do_swap(selected, target)
+				return
+			cursor.x = clampi(cursor.x + dir.x, 0, GRID_SIZE - 1)
+			cursor.y = clampi(cursor.y + dir.y, 0, GRID_SIZE - 1)
+			_reset_hint()
+			return
 
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		var cell := _pos_to_cell(event.position)
 		if event.pressed:
 			if cell.x >= 0:
+				cursor = cell
 				dragging = true
 				drag_from = cell
 				if selected == Vector2i(-1, -1):
@@ -358,7 +476,6 @@ func _find_hint() -> void:
 
 # --- Swap & Match Logic ---
 func _do_swap(a: Vector2i, b: Vector2i) -> void:
-	selected = Vector2i(-1, -1)
 	_reset_hint()
 	animating = true
 	chain = 0
@@ -369,6 +486,7 @@ func _do_swap(a: Vector2i, b: Vector2i) -> void:
 		var other_pos: Vector2i = b if hc_pos == a else a
 		var target_color: int = grid[other_pos.x][other_pos.y]
 		await _animate_swap(a, b)
+		selected = Vector2i(-1, -1)
 		sfx.play(sfx.star_sound)
 		var to_remove: Array[Vector2i] = [hc_pos]
 		for col in GRID_SIZE:
@@ -393,6 +511,7 @@ func _do_swap(a: Vector2i, b: Vector2i) -> void:
 	_swap_grid(a, b)
 	_swap_specials(a, b)
 	await _animate_swap(a, b)
+	selected = Vector2i(-1, -1)
 	var matches := _find_matches()
 	if matches.is_empty():
 		_swap_grid(a, b)
@@ -744,8 +863,17 @@ func _finish_move() -> void:
 		shake_amount = 10.0
 	_update_ui()
 	if not _has_valid_moves():
+		if demo_mode:
+			get_tree().change_scene_to_file("res://scenes/title.tscn")
+			return
 		no_moves = true
-		message_label.text = "No moves! Click to restart."
+		var rank: int = HighScores.add_score(score, level)
+		if rank == 0:
+			message_label.text = "NEW HIGH SCORE! Click to restart."
+		elif rank > 0:
+			message_label.text = "Top %d! Click to restart." % (rank + 1)
+		else:
+			message_label.text = "No moves! Click to restart."
 		message_label.visible = true
 	animating = false
 
@@ -781,3 +909,62 @@ func _restart() -> void:
 func _update_ui() -> void:
 	score_label.text = "Score: %d" % score
 	level_label.text = "Level %d" % level
+
+func _demo_select() -> void:
+	var best_a := Vector2i.ZERO
+	var best_b := Vector2i.ZERO
+	var best_score := -1
+	for col in GRID_SIZE:
+		for row in GRID_SIZE:
+			for dir: Vector2i in [Vector2i(1,0), Vector2i(0,1)]:
+				var nc: int = col + dir.x
+				var nr: int = row + dir.y
+				if nc >= GRID_SIZE or nr >= GRID_SIZE:
+					continue
+				var a := Vector2i(col, row)
+				var b := Vector2i(nc, nr)
+				_swap_grid(a, b)
+				var m := _find_matches()
+				var s := 0
+				if not m.is_empty():
+					s = m.size()
+					var h := _get_runs_h(m)
+					var v := _get_runs_v(m)
+					for r in h + v:
+						if r.size() >= 5:
+							s += 50
+						elif r.size() == 4:
+							s += 20
+					for cell in m:
+						var in_h := false
+						var in_v := false
+						for r in h:
+							if cell in r:
+								in_h = true
+								break
+						for r in v:
+							if cell in r:
+								in_v = true
+								break
+						if in_h and in_v:
+							s += 35
+							break
+					for cell in m:
+						if specials[cell.x][cell.y] != Special.NONE:
+							s += 30
+				_swap_grid(a, b)
+				if s > best_score:
+					best_score = s
+					best_a = a
+					best_b = b
+	if best_score > 0:
+		selected = best_a
+		demo_target = best_b
+
+func _demo_swap() -> void:
+	var a := selected
+	var b := demo_target
+	selected = Vector2i(-1, -1)
+	demo_target = Vector2i(-1, -1)
+	if a.x >= 0 and b.x >= 0:
+		_do_swap(a, b)

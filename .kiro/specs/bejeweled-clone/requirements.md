@@ -16,14 +16,19 @@ As a player, I want to see an 8x8 grid of colored gems so that I can identify po
 - [x] An animated "GemMatch" logo is displayed above the board
 
 ### US-2: Gem Selection and Swapping
-As a player, I want to click or drag a gem to swap it with an adjacent gem, so that I can create matches.
+As a player, I want to click, drag, or use the keyboard to swap gems with adjacent gems, so that I can create matches.
 
 **Acceptance Criteria:**
 - [x] Clicking a gem highlights it with a pulsing white ring
 - [x] Clicking an adjacent gem swaps the two with a bounce tween animation
 - [x] Dragging from one gem to an adjacent gem performs a swap
 - [x] Clicking a non-adjacent gem changes the selection
+- [x] Arrow keys (or WASD) move a visible cursor around the grid
+- [x] Enter/Space selects the gem under the cursor; arrow keys from a selected gem perform a swap
+- [x] Escape deselects the current gem
+- [x] Mouse clicks sync the keyboard cursor position
 - [x] A swap only commits if it results in at least one match of 3+; otherwise gems animate back
+- [x] Selection ring follows the gem during swap animation, showing the move direction
 - [x] Sound effects play for select, swap, and bad swap
 
 ### US-3: Match Detection and Removal
@@ -82,10 +87,40 @@ As a player, I want sound effects and background music to make the game feel pol
 - [x] Procedural chiptune background music with pentatonic melody, square-wave bass, and sine pad
 - [x] All audio is synthesized at runtime — zero audio files
 
-### US-9: Game Over
-As a player, I want the game to detect when no valid moves remain.
+### US-9: Game Over and High Scores
+As a player, I want the game to detect when no valid moves remain and persist my score.
 
 **Acceptance Criteria:**
 - [x] After each move and cascade, the board is checked for possible moves
-- [x] If no valid moves exist, a "No Moves" message is displayed
-- [x] Clicking restarts the game with a fresh board
+- [x] If no valid moves exist, a game over message is displayed
+- [x] High score rank is shown if the score qualifies (e.g. "NEW HIGH SCORE!", "Top 3!")
+- [x] Clicking or pressing a key restarts the game with a fresh board
+- [x] Top 10 scores are persisted to `user://highscores.json` with score, level, and date
+- [x] Demo mode scores are never saved
+
+### US-10: Title Screen and Menus
+As a player, I want a title screen with menu options so I can navigate the game.
+
+**Acceptance Criteria:**
+- [x] Title screen displays animated "GemMatch" logo with floating gem background
+- [x] Menu has five options: "New Game", "How to Play", "High Scores", "Demo Mode", "Quit"
+- [x] Mouse hover highlights menu items; clicking activates them
+- [x] Arrow keys (or W/S) navigate the menu; Enter/Space activates the selected item
+- [x] "How to Play" screen shows all 7 gem shapes with names, all 3 special gem types with animated overlays and descriptions
+- [x] "High Scores" screen shows top 10 leaderboard with rank, score, level, and date
+- [x] Gold/silver/bronze coloring for top 3 scores
+- [x] Escape/Backspace returns from sub-screens to the menu
+- [x] "Quit" option exits the application
+- [x] Smooth fade-to-black transitions between screens
+
+### US-11: Demo Mode
+As a player, I want the game to play itself as an attract screen after idle.
+
+**Acceptance Criteria:**
+- [x] After 15 seconds of inactivity on the title screen, demo mode launches
+- [x] Demo mode can also be launched from the "Demo Mode" menu item
+- [x] The AI evaluates all possible swaps and picks the optimal move, prioritizing special gem creation (5-match, L/T, 4-match) and triggering existing specials
+- [x] Demo AI briefly highlights the chosen gem before executing the swap
+- [x] Any mouse click or key press during demo returns to the title screen
+- [x] Demo runs until game over (no valid moves), then returns to title
+- [x] Demo scores are never saved to high scores
